@@ -8,6 +8,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/fiatjaf/eventstore"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
@@ -87,6 +88,12 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	notes := []*Article{}
 	for ev := range sub.Events {
 		// channel will stay open until the ctx is cancelled (in this case, context timeout)
+
+        err = s.Store.SaveEvent(ctx, ev)
+        if (err != nil) {
+            log.Fatalln(err)
+        }
+
         a, err := eventToArticle(ev)
         if (err != nil) {
             log.Fatalln(err)
@@ -105,8 +112,43 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("to be impl")
+	log.Println("retrieving article from cache")
 
+	vars := mux.Vars(r)
+	nid := vars["id"]
+
+    // Convert NIP-19 nevent123... to NIP-01 hex ID
+    _, v, err := nip19.Decode(nid)
+    if err != nil {
+        log.Fatalln(err)
+    }
+
+    filter := nostr.Filter{
+        IDs:   []string{v.(string)},
+        Limit:   1, // There should only be one article with this ID.
+    }
+
+    ch, err := s.Store.QueryEvents(context.Background(), filter)
+    if err != nil {
+        log.Fatalln(err)
+    }
+
+    articles := []*Article{}
+    for evt := range ch {
+        a, err := eventToArticle(evt)
+        if (err != nil) {
+            log.Fatalln(err)
+        }
+		articles = append(articles, a)
+    }
+
+	tmpl, err := template.ParseFiles("static/article.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tmpl.Execute(w, articles[0])
 }
 
 func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {

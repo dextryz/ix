@@ -112,6 +112,16 @@ main {
     background: var(--clr-black);
 }
 
+.article {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    background: var(--clr-black);
+    padding-bottom: 2rem;
+    padding-top: 2rem;
+}
+
 .content {
     display: flex;
     flex-direction: column;
@@ -125,7 +135,7 @@ main {
 }
 
 .content h2 {
-    font-size: x-large;
+    font-size: large;
     font-weight: bold;
 }
 

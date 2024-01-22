@@ -1,0 +1,15 @@
+{{ block "article" . }}
+
+<article class="article">
+
+    <h1 class="content">
+        {{ .Title }}
+    </h1>
+
+    <section id="#content" class="content">
+        {{ .HtmlContent }}
+    </section>
+
+</article>
+
+{{ end }}
