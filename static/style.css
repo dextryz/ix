@@ -1,0 +1,235 @@
+/*
+  Josh's Custom CSS Reset
+  https://www.joshwcomeau.com/css/custom-css-reset/
+*/
+
+@font-face {
+    font-family: 'Geist';
+    src: url('../fonts/Geist/Geist-Light.otf') format('truetype');
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: 'Geist';
+    src: url('../fonts/Geist/Geist-Bold.otf') format('truetype');
+    font-weight: bold;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+}
+
+input, button, textarea, select {
+    font: inherit;
+}
+
+p, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+}
+
+/* ---------------------------------------------------- */
+
+:root {
+    --clr-black: #1E2227;
+    --clr-dark: #323842;
+    --clr-green: #98C379;
+    --clr-red: #E06C75;
+    --clr-yellow: #E5C07B;
+    --clr-blue: #61AFEF;
+    --clr-pink: #C678DD;
+    --clr-cyan: #56B6C2;
+    --clr-white: #F6F7F9;
+    --clr-text: #ABB2BF;
+}
+
+body {
+    font-family: 'Geist';
+    font-size: 16px;
+    background: var(--clr-black);
+}
+
+main {
+    display: block;
+    padding: 1rem;
+    background: var(--clr-black);
+}
+
+.search {
+    display: flex:
+    flow-direction: column;
+    align-items: center;
+    max-width: 800px;
+    margin: 0 auto; /* Center the container */
+    padding: 1rem; 
+}
+
+.search-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.small {
+    flex-grow: 1; /* Allows the search bar to grow and take up available space */
+    padding: 1rem;
+}
+
+.search-bar {
+    flex-grow: 1; /* Allows the search bar to grow and take up available space */
+    outline: 0;
+    border: 2px solid transparent; /* required to mock outline, so layout does not shift */
+    padding: 8px;
+    border-radius: 8px;
+    background: var(--clr-dark);
+    font-size: 16px;
+    color: var(--clr-text);
+}
+
+.search-bar:focus {
+    background:
+        linear-gradient(to top, var(--clr-dark), var(--clr-dark)) padding-box,
+        linear-gradient(to top, var(--clr-cyan), var(--clr-blue)) border-box;
+}
+
+.message.error {
+    color: var(--clr-red);
+}
+
+.message.success {
+    color: var(--clr-green);
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(25em, 1fr));
+    gap: 1rem;
+    background: var(--clr-black);
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    color: #ABB2BF;
+    text-align: left;
+    max-width: 50rem;
+    gap: 2rem;
+    margin-inline: auto;
+    width: min(90%, 1000px);
+}
+
+.content h2 {
+    font-size: x-large;
+    font-weight: bold;
+}
+
+.inline {
+    color: var(--clr-red);
+    text-decoration: none; /* Removes the underline */
+}
+
+.inline:visited {
+    color: #C678DD;
+}
+
+.inline:hover {
+    color: #61AFEF;
+}
+
+a {
+    color: var(--clr-blue);
+    text-decoration: none; /* Removes the underline */
+}
+
+/* Changing the color when the link is visited */
+a:visited {
+    color: #C678DD; /* Set your desired color for visited links */
+}
+
+/* Changing the color when the link is hovered over */
+a:hover {
+    color: #61AFEF; /* Set your desired hover color */
+}
+
+.article-card {
+    display: flex;
+    flex-flow: column;
+    color: #93a1a1;
+    border-radius: 1rem;
+    background: white;
+    border-width: 0px;
+    border-style: solid;
+    border-color: #586e75;
+    text-align: left;
+}
+
+.card-body {
+    display: flex;
+    flex-flow: column;
+    flex: 1;
+    position: relative;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.card-header {
+    color: black;
+    font-size: large;
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+}
+
+.card-header:hover {
+    background: linear-gradient(90deg,#ff8a00,#e52e71);
+    text-shadow: none;
+    -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+.card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.card-tag {
+    color: var(--clr-text);
+    font-weight: bold;
+    font-size: medium;
+    cursor: pointer
+}
+
+.card-tag:hover {
+    background: linear-gradient(90deg, var(--clr-blue), var(--clr-pink));
+    font-weight: bolder;
+    text-shadow: none;
+    -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+footer {
+    display: flex;
+    justify-content: center;
+    color: #ABB2BF;
+    background: var(--clr-black);
+    padding-bottom: 1rem;
+}
+
+footer i {
+    color: var(--clr-red);
+}
+
+::placeholder {
+    font-size: 16px;
+    color: var(--clr-text);
+}

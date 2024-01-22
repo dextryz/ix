@@ -1,0 +1,33 @@
+{{ block "events" . }}
+
+{{ range . }}
+
+<article class="article-card">
+
+    <div class="card-body">
+
+        <header class="card-header"
+            hx-get="{{ .Id }}"
+            hx-push-url="true"
+            hx-target="body"
+            hx-swap="outerHTML">
+            {{ .Title }}
+        </header>
+
+        <div class="card-tags">
+            {{ range .HashTags }}
+                <h2 class="card-tag"
+                    hx-get="hashtag/{{ . }}"
+                    hx-push-url="true"
+                    hx-target="body"
+                    hx-swap="outerHTML">
+                    {{ . }}
+                </h2>
+            {{ end }}
+        </div>
+
+    </div>
+</article>
+
+{{ end }}
+{{ end }}
