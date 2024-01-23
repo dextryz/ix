@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"text/template"
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/fiatjaf/eventstore"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
@@ -18,7 +18,7 @@ type Article struct {
 	Id          string // NIP-19 (note1...)
 	Image       string
 	Title       string
-    Npub string
+	Npub        string
 	HashTags    []string // #focus #think without to the # in sstring
 	MdContent   string
 	HtmlContent string
@@ -26,15 +26,11 @@ type Article struct {
 }
 
 type Handler struct {
-	Store eventstore.Store
-	subs  []*nostr.Subscription
+    relay *nostr.Relay
 }
 
 func (s *Handler) Close() error {
-	for _, sub := range s.subs {
-		sub.Close()
-	}
-	s.Store.Close()
+	s.relay.Close()
 	return nil
 }
 
@@ -57,49 +53,17 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("pull profile NIP-01")
 
-	npub := r.URL.Query().Get("search")
+	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
+	//npub := r.URL.Query().Get("keywords")
 
-	ctx := context.Background()
-	relay, err := nostr.RelayConnect(ctx, "wss://nostr-01.yakihonne.com")
-	if err != nil {
-		panic(err)
-	}
+    notes := s.cache(npub)
 
-	var filters nostr.Filters
-	if _, v, err := nip19.Decode(npub); err == nil {
-		pub := v.(string)
-		filters = []nostr.Filter{{
-			Kinds:   []int{nostr.KindArticle},
-			Authors: []string{pub},
-			Limit:   1000,
-		}}
-	} else {
-		panic(err)
-	}
+    log.Printf("%d articles cached", len(notes))
 
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
-	sub, err := relay.Subscribe(ctx, filters)
-	if err != nil {
-		panic(err)
-	}
-
-	notes := []*Article{}
-	for ev := range sub.Events {
-		// channel will stay open until the ctx is cancelled (in this case, context timeout)
-
-        err = s.Store.SaveEvent(ctx, ev)
-        if (err != nil) {
-            log.Fatalln(err)
-        }
-
-        a, err := eventToArticle(ev)
-        if (err != nil) {
-            log.Fatalln(err)
-        }
-		notes = append(notes, a)
-	}
+	keywords := r.URL.Query().Get("keywords")
+    if keywords != "" {
+        notes = s.search(keywords)
+    }
 
 	tmpl, err := template.ParseFiles("static/card.html")
 	if err != nil {
@@ -110,6 +74,105 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, notes)
 }
 
+func (s *Handler) cache(npub string) []*Article {
+
+    log.Println("caching articles")
+
+	ctx := context.Background()
+
+    hashmap := map[string]*nostr.Event{}
+    evts := []*nostr.Event{}
+
+    for _, relay := range []string{"wss://nostr-01.yakihonne.com", "wss://relay.damus.io/"} {
+
+        relay, err := nostr.RelayConnect(ctx, relay)
+        if err != nil {
+            panic(err)
+        }
+
+        _, v, err := nip19.Decode(npub)
+        if err != nil {
+            panic(err)
+        }
+
+        var filter nostr.Filter
+        pub := v.(string)
+        filter = nostr.Filter{
+            Kinds:   []int{nostr.KindArticle},
+            Authors: []string{pub},
+            Limit:   1000,
+        }
+
+        events, err := relay.QuerySync(ctx, filter)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        evts = append(evts, events...)
+    }
+
+    log.Println(len(evts))
+
+    for _, v := range evts {
+        hashmap[v.ID] = v
+    }
+
+	notes := []*Article{}
+	var wg sync.WaitGroup
+    for _, e := range hashmap {
+
+		wg.Add(1) // Be certain to Add before launching the goroutine!
+		go func(ev *nostr.Event) {
+			defer wg.Done()
+            err := s.relay.Publish(ctx, *ev)
+            if err != nil {
+                log.Fatalln(err)
+            }
+		}(e)
+
+        a, err := eventToArticle(e)
+        if err != nil {
+            log.Fatalln(err)
+        }
+        notes = append(notes, a)
+    }
+	wg.Wait()
+
+    log.Println("DONE")
+
+    return notes
+}
+
+func (s *Handler) search(keywords string) []*Article {
+
+	log.Println("searching")
+
+    log.Println(keywords)
+
+	filter := nostr.Filter{
+        Kinds:   []int{nostr.KindArticle},
+		Search: keywords,
+		Limit:  1000,
+	}
+
+	events, err := s.relay.QuerySync(context.Background(), filter)
+	if err != nil {
+        log.Fatalln(err)
+	}
+
+    log.Printf("Article found: %d with keywords: %s", len(events), keywords)
+
+	notes := []*Article{}
+    for _, e := range events {
+		a, err := eventToArticle(e)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		notes = append(notes, a)
+	}
+
+    return notes
+}
+
 func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("retrieving article from cache")
@@ -117,30 +180,42 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	nid := vars["id"]
 
-    // Convert NIP-19 nevent123... to NIP-01 hex ID
-    _, v, err := nip19.Decode(nid)
+	// Convert NIP-19 nevent123... to NIP-01 hex ID
+	_, v, err := nip19.Decode(nid)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
+    _, pk, err := nip19.Decode(npub)
     if err != nil {
-        log.Fatalln(err)
+        panic(err)
     }
 
-    filter := nostr.Filter{
-        IDs:   []string{v.(string)},
-        Limit:   1, // There should only be one article with this ID.
-    }
+    log.Print(nid)
 
-    ch, err := s.Store.QueryEvents(context.Background(), filter)
-    if err != nil {
-        log.Fatalln(err)
-    }
+	filter := nostr.Filter{
+		IDs:   []string{v.(string)},
+        Authors: []string{pk.(string)},
+		Limit: 5, // There should only be one article with this ID.
+	}
 
-    articles := []*Article{}
-    for evt := range ch {
-        a, err := eventToArticle(evt)
-        if (err != nil) {
-            log.Fatalln(err)
-        }
+    ctx := context.Background()
+ 	events, err := s.relay.QuerySync(ctx, filter)
+ 	if err != nil {
+ 		log.Fatalln(err)
+ 	}
+
+    log.Print(events)
+
+	articles := []*Article{}
+    for _, e := range events {
+		a, err := eventToArticle(e)
+		if err != nil {
+			log.Fatalln(err)
+		}
 		articles = append(articles, a)
-    }
+	}
 
 	tmpl, err := template.ParseFiles("static/article.html")
 	if err != nil {
@@ -203,7 +278,7 @@ func eventToArticle(e *nostr.Event) (*Article, error) {
 
 	a := &Article{
 		Id:          id,
-        Npub: npub,
+		Npub:        npub,
 		MdContent:   e.Content,
 		HtmlContent: mdToHtml(e.Content),
 		PublishedAt: createdAt,

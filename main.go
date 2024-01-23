@@ -9,8 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fiatjaf/eventstore/elasticsearch"
 	"github.com/fiatjaf/eventstore/sqlite3"
 	"github.com/gorilla/mux"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 func main() {
@@ -28,8 +30,19 @@ func main() {
 
 	db.Init()
 
+    search := &elasticsearch.ElasticsearchStorage{URL: "http://localhost:9200"}
+
+    search.Init()
+
+    ctx := context.Background()
+
+    relay, err := nostr.RelayConnect(ctx, "ws://localhost:3334")
+    if err != nil {
+        panic(err)
+    }
+
 	h := Handler{
-		Store: db,
+        relay: relay,
 	}
 
 	r := mux.NewRouter()
@@ -64,7 +77,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := h.Close()
+	err = h.Close()
 	if err != nil {
 		log.Fatalf("closing subscriptions failed:%+v", err)
 	}
