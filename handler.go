@@ -26,7 +26,7 @@ type Article struct {
 }
 
 type Handler struct {
-    relay *nostr.Relay
+	relay *nostr.Relay
 }
 
 func (s *Handler) Close() error {
@@ -54,9 +54,9 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
 	//npub := r.URL.Query().Get("keywords")
 
-    s.cache(npub)
+	s.cache(npub)
 
-    notes := s.search(r.URL.Query().Get("keywords"))
+	notes := s.search(r.URL.Query().Get("keywords"))
 
 	tmpl, err := template.ParseFiles("static/card.html")
 	if err != nil {
@@ -69,87 +69,87 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handler) cache(npub string) {
 
-    log.Printf("Caching articles for %s", npub)
+	log.Printf("Caching articles for %s", npub)
 
 	ctx := context.Background()
 
-    for _, relay := range []string{"wss://nostr-01.yakihonne.com", "wss://relay.damus.io/"} {
+	for _, relay := range []string{"wss://nostr-01.yakihonne.com", "wss://relay.damus.io/"} {
 
-        r, err := nostr.RelayConnect(ctx, relay)
-        if err != nil {
-            panic(err)
-        }
+		r, err := nostr.RelayConnect(ctx, relay)
+		if err != nil {
+			panic(err)
+		}
 
-        _, v, err := nip19.Decode(npub)
-        if err != nil {
-            panic(err)
-        }
+		_, v, err := nip19.Decode(npub)
+		if err != nil {
+			panic(err)
+		}
 
-        var filter nostr.Filter
-        pub := v.(string)
-        filter = nostr.Filter{
-            Kinds:   []int{nostr.KindArticle},
-            Authors: []string{pub},
-            Limit:   1000,
-        }
+		var filter nostr.Filter
+		pub := v.(string)
+		filter = nostr.Filter{
+			Kinds:   []int{nostr.KindArticle},
+			Authors: []string{pub},
+			Limit:   1000,
+		}
 
-        events, err := r.QuerySync(ctx, filter)
-        if err != nil {
-            log.Fatalln(err)
-        }
+		events, err := r.QuerySync(ctx, filter)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
-        var wg sync.WaitGroup
-        for _, e := range events {
+		var wg sync.WaitGroup
+		for _, e := range events {
 
-            filter := nostr.Filter{
-                IDs:   []string{e.ID},
-                Authors: []string{pub},
-                Limit: 1, // There should only be one article with this ID.
-            }
+			filter := nostr.Filter{
+				IDs:     []string{e.ID},
+				Authors: []string{pub},
+				Limit:   1, // There should only be one article with this ID.
+			}
 
-            ee, err := s.relay.QuerySync(ctx, filter)
-            if err != nil {
-                log.Fatalln(err)
-            }
+			ee, err := s.relay.QuerySync(ctx, filter)
+			if err != nil {
+				log.Fatalln(err)
+			}
 
-            if len(ee) == 0 {
+			if len(ee) == 0 {
 
-                wg.Add(1) // Be certain to Add before launching the goroutine!
-                go func(ev *nostr.Event) {
-                    defer wg.Done()
-                    err := s.relay.Publish(ctx, *ev)
-                    if err != nil {
-                        log.Fatalln(err)
-                    }
-                }(e)
-            }
-            
-        }
-        wg.Wait()
-    }
+				wg.Add(1) // Be certain to Add before launching the goroutine!
+				go func(ev *nostr.Event) {
+					defer wg.Done()
+					err := s.relay.Publish(ctx, *ev)
+					if err != nil {
+						log.Fatalln(err)
+					}
+				}(e)
+			}
 
-    log.Println("DONE")
+		}
+		wg.Wait()
+	}
+
+	log.Println("DONE")
 }
 
 func (s *Handler) search(keywords string) []*Article {
 
-    log.Printf("Searching for keywords: [%s]", keywords)
+	log.Printf("Searching for keywords: [%s]", keywords)
 
 	filter := nostr.Filter{
-        Kinds:   []int{nostr.KindArticle},
+		Kinds:  []int{nostr.KindArticle},
 		Search: keywords,
 		Limit:  1000,
 	}
 
 	events, err := s.relay.QuerySync(context.Background(), filter)
 	if err != nil {
-        log.Fatalln(err)
+		log.Fatalln(err)
 	}
 
-    log.Printf("Article found: %d with keywords: %s", len(events), keywords)
+	log.Printf("Article found: %d with keywords: %s", len(events), keywords)
 
 	notes := []*Article{}
-    for _, e := range events {
+	for _, e := range events {
 		a, err := eventToArticle(e)
 		if err != nil {
 			log.Fatalln(err)
@@ -157,7 +157,7 @@ func (s *Handler) search(keywords string) []*Article {
 		notes = append(notes, a)
 	}
 
-    return notes
+	return notes
 }
 
 func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
@@ -174,29 +174,29 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 	}
 
 	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
-    _, pk, err := nip19.Decode(npub)
-    if err != nil {
-        panic(err)
-    }
-
-    log.Print(nid)
-
-	filter := nostr.Filter{
-		IDs:   []string{v.(string)},
-        Authors: []string{pk.(string)},
-		Limit: 5, // There should only be one article with this ID.
+	_, pk, err := nip19.Decode(npub)
+	if err != nil {
+		panic(err)
 	}
 
-    ctx := context.Background()
- 	events, err := s.relay.QuerySync(ctx, filter)
- 	if err != nil {
- 		log.Fatalln(err)
- 	}
+	log.Print(nid)
 
-    log.Print(events)
+	filter := nostr.Filter{
+		IDs:     []string{v.(string)},
+		Authors: []string{pk.(string)},
+		Limit:   5, // There should only be one article with this ID.
+	}
+
+	ctx := context.Background()
+	events, err := s.relay.QuerySync(ctx, filter)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	log.Print(events)
 
 	articles := []*Article{}
-    for _, e := range events {
+	for _, e := range events {
 		a, err := eventToArticle(e)
 		if err != nil {
 			log.Fatalln(err)

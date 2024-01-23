@@ -30,19 +30,19 @@ func main() {
 
 	db.Init()
 
-    search := &elasticsearch.ElasticsearchStorage{URL: "http://localhost:9200"}
+	search := &elasticsearch.ElasticsearchStorage{URL: "http://localhost:9200"}
 
-    search.Init()
+	search.Init()
 
-    ctx := context.Background()
+	ctx := context.Background()
 
-    relay, err := nostr.RelayConnect(ctx, "ws://localhost:3334")
-    if err != nil {
-        panic(err)
-    }
+	relay, err := nostr.RelayConnect(ctx, "ws://localhost:3334")
+	if err != nil {
+		panic(err)
+	}
 
 	h := Handler{
-        relay: relay,
+		relay: relay,
 	}
 
 	r := mux.NewRouter()
