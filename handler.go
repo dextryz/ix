@@ -51,19 +51,12 @@ func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("pull profile NIP-01")
-
 	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
 	//npub := r.URL.Query().Get("keywords")
 
-    notes := s.cache(npub)
+    s.cache(npub)
 
-    log.Printf("%d articles cached", len(notes))
-
-	keywords := r.URL.Query().Get("keywords")
-    if keywords != "" {
-        notes = s.search(keywords)
-    }
+    notes := s.search(r.URL.Query().Get("keywords"))
 
 	tmpl, err := template.ParseFiles("static/card.html")
 	if err != nil {
@@ -74,18 +67,15 @@ func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, notes)
 }
 
-func (s *Handler) cache(npub string) []*Article {
+func (s *Handler) cache(npub string) {
 
-    log.Println("caching articles")
+    log.Printf("Caching articles for %s", npub)
 
 	ctx := context.Background()
 
-    hashmap := map[string]*nostr.Event{}
-    evts := []*nostr.Event{}
-
     for _, relay := range []string{"wss://nostr-01.yakihonne.com", "wss://relay.damus.io/"} {
 
-        relay, err := nostr.RelayConnect(ctx, relay)
+        r, err := nostr.RelayConnect(ctx, relay)
         if err != nil {
             panic(err)
         }
@@ -103,50 +93,47 @@ func (s *Handler) cache(npub string) []*Article {
             Limit:   1000,
         }
 
-        events, err := relay.QuerySync(ctx, filter)
+        events, err := r.QuerySync(ctx, filter)
         if err != nil {
             log.Fatalln(err)
         }
-        evts = append(evts, events...)
-    }
 
-    log.Println(len(evts))
+        var wg sync.WaitGroup
+        for _, e := range events {
 
-    for _, v := range evts {
-        hashmap[v.ID] = v
-    }
+            filter := nostr.Filter{
+                IDs:   []string{e.ID},
+                Authors: []string{pub},
+                Limit: 1, // There should only be one article with this ID.
+            }
 
-	notes := []*Article{}
-	var wg sync.WaitGroup
-    for _, e := range hashmap {
-
-		wg.Add(1) // Be certain to Add before launching the goroutine!
-		go func(ev *nostr.Event) {
-			defer wg.Done()
-            err := s.relay.Publish(ctx, *ev)
+            ee, err := s.relay.QuerySync(ctx, filter)
             if err != nil {
                 log.Fatalln(err)
             }
-		}(e)
 
-        a, err := eventToArticle(e)
-        if err != nil {
-            log.Fatalln(err)
+            if len(ee) == 0 {
+
+                wg.Add(1) // Be certain to Add before launching the goroutine!
+                go func(ev *nostr.Event) {
+                    defer wg.Done()
+                    err := s.relay.Publish(ctx, *ev)
+                    if err != nil {
+                        log.Fatalln(err)
+                    }
+                }(e)
+            }
+            
         }
-        notes = append(notes, a)
+        wg.Wait()
     }
-	wg.Wait()
 
     log.Println("DONE")
-
-    return notes
 }
 
 func (s *Handler) search(keywords string) []*Article {
 
-	log.Println("searching")
-
-    log.Println(keywords)
+    log.Printf("Searching for keywords: [%s]", keywords)
 
 	filter := nostr.Filter{
         Kinds:   []int{nostr.KindArticle},
