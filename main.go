@@ -9,40 +9,43 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fiatjaf/eventstore/elasticsearch"
-	"github.com/fiatjaf/eventstore/sqlite3"
 	"github.com/gorilla/mux"
 	"github.com/nbd-wtf/go-nostr"
+)
+
+func StringEnv(key string) string {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		log.Fatalf("address env variable \"%s\" not set, usual", key)
+	}
+	return value
+}
+
+var (
+	IXIAN_SK = StringEnv("IXIAN_SK")
 )
 
 func main() {
 
 	log.Println("Starting...")
 
-	db := &sqlite3.SQLite3Backend{
-		DatabaseURL:       "nostr_sqlite.db",
-		QueryLimit:        1_000_000,
-		QueryAuthorsLimit: 1_000_000,
-		QueryKindsLimit:   1_000_000,
-		QueryIDsLimit:     1_000_000,
-		QueryTagsLimit:    1_000_000,
-	}
-
-	db.Init()
-
-	search := &elasticsearch.ElasticsearchStorage{URL: "http://localhost:9200"}
-
-	search.Init()
-
 	ctx := context.Background()
 
+	// Elasticsearch store relay
 	relay, err := nostr.RelayConnect(ctx, "ws://localhost:3334")
+	if err != nil {
+		panic(err)
+	}
+
+	// Slice store relay
+	cache, err := nostr.RelayConnect(ctx, "ws://localhost:3335")
 	if err != nil {
 		panic(err)
 	}
 
 	h := Handler{
 		relay: relay,
+		cache: cache,
 	}
 
 	r := mux.NewRouter()

@@ -27,6 +27,7 @@ type Article struct {
 
 type Handler struct {
 	relay *nostr.Relay
+	cache *nostr.Relay
 }
 
 func (s *Handler) Close() error {
@@ -53,9 +54,20 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	npub := r.URL.Query().Get("npub")
 
-    log.Printf("pulling articles for %s", npub)
+	log.Printf("pulling articles for %s", npub)
 
-	s.cache(npub)
+	// Last cached was 10 mins ago
+	ctx := context.Background()
+	since := nostr.Now() - 600
+	list, err := s.cache.QuerySync(ctx, nostr.Filter{Since: &since, Limit: 100})
+	if err != nil {
+		panic(err)
+	}
+
+	// If no events was pulled and cached in the last 10 mins.
+	if len(list) == 0 {
+		s.store(npub)
+	}
 
 	notes := s.search("")
 
@@ -81,7 +93,7 @@ func (s *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, notes)
 }
 
-func (s *Handler) cache(npub string) {
+func (s *Handler) store(npub string) {
 
 	log.Printf("Caching articles for %s", npub)
 
@@ -107,14 +119,14 @@ func (s *Handler) cache(npub string) {
 			Limit:   1000,
 		}
 
-        log.Println("A")
+		log.Println("A")
 
 		events, err := r.QuerySync(ctx, filter)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
-        log.Println("B")
+		log.Println("B")
 
 		ids := []string{}
 		for _, e := range events {
@@ -127,7 +139,7 @@ func (s *Handler) cache(npub string) {
 			Limit:   1, // There should only be one article with this ID.
 		}
 
-        log.Println("C")
+		log.Println("C")
 
 		cached, err := s.relay.QuerySync(ctx, f)
 		if err != nil {
@@ -138,7 +150,21 @@ func (s *Handler) cache(npub string) {
 			cmap[v.ID] = struct{}{}
 		}
 
-        log.Println("D")
+		log.Println("D")
+
+		_, sk, err := nip19.Decode(IXIAN_SK)
+		if err != nil {
+			panic(err)
+		}
+
+		p := nostr.Event{CreatedAt: nostr.Now()}
+		p.Sign(sk.(string))
+
+		// Store the time when event was cached
+		err = s.cache.Publish(ctx, p)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
 		var wg sync.WaitGroup
 		for _, e := range events {
@@ -148,7 +174,8 @@ func (s *Handler) cache(npub string) {
 				wg.Add(1) // Be certain to Add before launching the goroutine!
 				go func(ev *nostr.Event) {
 					defer wg.Done()
-					err := s.relay.Publish(ctx, *ev)
+
+					err = s.relay.Publish(ctx, *ev)
 					if err != nil {
 						log.Fatalln(err)
 					}
@@ -158,7 +185,7 @@ func (s *Handler) cache(npub string) {
 		}
 		wg.Wait()
 
-        log.Println("E")
+		log.Println("E")
 	}
 
 	log.Println("DONE")
