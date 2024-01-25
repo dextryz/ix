@@ -37,14 +37,13 @@ func (s *Handler) Close() error {
 
 func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
 
-	tmpl, err := template.ParseFiles("static/index.html", "static/home.html", "static/card.html")
+	tmpl, err := template.ParseFiles("static/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	notes := []*nostr.Event{}
-	err = tmpl.ExecuteTemplate(w, "index.html", notes)
+	err = tmpl.ExecuteTemplate(w, "index.html", "")
 	if err != nil {
 		fmt.Println("Error executing template:", err)
 	}
@@ -58,7 +57,7 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	// Last cached was 10 mins ago
 	ctx := context.Background()
-	since := nostr.Now() - 600
+	since := nostr.Now() - 3600
 	list, err := s.cache.QuerySync(ctx, nostr.Filter{Since: &since, Limit: 100})
 	if err != nil {
 		panic(err)

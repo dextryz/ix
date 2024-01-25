@@ -58,8 +58,7 @@ body {
     display: flex;
     justify-content: center;
     flex-flow: column wrap;
-    margin-top: 2rem;
-    padding: 1.5rem;
+    padding: 1rem;
     gap: 1rem;
 }
 
@@ -68,6 +67,7 @@ body {
     flex-flow: column wrap;
     justify-content: space-between;
     align-content: center;
+    padding-top: 2rem;
     gap: 1rem;
 }
 
@@ -77,6 +77,8 @@ body {
     justify-content: space-between;
     max-width: 800px;
     margin: 0 auto; /* Center the container */
+    padding-top: 1rem;
+    padding-bottom: 1rem;
 }
 
 .small {
@@ -109,13 +111,6 @@ body {
     color: var(--clr-green);
 }
 
-.cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(25em, 1fr));
-    gap: 1rem;
-    background: var(--clr-black);
-}
-
 .article {
     display: flex;
     flex-direction: column;
@@ -139,7 +134,7 @@ body {
 }
 
 h1 {
-    color: var(--clr-text);
+    color: var(--clr-blue);
     font-size: 1.3rem;
     font-weight: 500; /* bold is 700, normal is 400, this is semi-bold */
     max-width: 800px;
@@ -177,23 +172,17 @@ h2 {
 }
 
 a {
-    color: var(--clr-blue);
+    color: var(--clr-text);
+    font-weight: bold;
     text-decoration: none; /* Removes the underline */
-}
-
-/* Changing the color when the link is visited */
-a:visited {
-    color: #C678DD; /* Set your desired color for visited links */
 }
 
 /* Changing the color when the link is hovered over */
 a:hover {
-    color: #61AFEF; /* Set your desired hover color */
+    color: var(--clr-red); /* Set your desired hover color */
 }
 
 .article-card {
-    display: flex;
-    flex-flow: column;
     color: #93a1a1;
     border-radius: 0.5rem;
     background: white;
@@ -262,6 +251,16 @@ footer {
 
 footer i {
     color: var(--clr-red);
+}
+
+main {
+    display: block;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20em, 1fr));
+    gap: 1rem;
 }
 
 ::placeholder {

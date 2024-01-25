@@ -60,7 +60,7 @@ func main() {
 	r.HandleFunc("/{id:[a-zA-Z0-9]+}", h.Article).Methods("GET")
 
 	s := &http.Server{
-		Addr:    "127.0.0.1:8081",
+		Addr:    "127.0.0.1:8080",
 		Handler: r,
 	}
 
