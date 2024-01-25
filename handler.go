@@ -36,7 +36,7 @@ func (s *Handler) Close() error {
 
 func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
 
-	tmpl, err := template.ParseFiles("static/index.html", "static/card.html")
+	tmpl, err := template.ParseFiles("static/index.html", "static/home.html", "static/card.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -49,12 +49,26 @@ func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Handler) Events(w http.ResponseWriter, r *http.Request) {
+func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
-	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
-	//npub := r.URL.Query().Get("keywords")
+	npub := r.URL.Query().Get("npub")
+
+    log.Printf("pulling articles for %s", npub)
 
 	s.cache(npub)
+
+	notes := s.search("")
+
+	tmpl, err := template.ParseFiles("static/home.html", "static/card.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tmpl.Execute(w, notes)
+}
+
+func (s *Handler) Search(w http.ResponseWriter, r *http.Request) {
 
 	notes := s.search(r.URL.Query().Get("keywords"))
 
@@ -93,27 +107,44 @@ func (s *Handler) cache(npub string) {
 			Limit:   1000,
 		}
 
+        log.Println("A")
+
 		events, err := r.QuerySync(ctx, filter)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
+        log.Println("B")
+
+		ids := []string{}
+		for _, e := range events {
+			ids = append(ids, e.ID)
+		}
+
+		f := nostr.Filter{
+			IDs:     ids,
+			Authors: []string{pub},
+			Limit:   1, // There should only be one article with this ID.
+		}
+
+        log.Println("C")
+
+		cached, err := s.relay.QuerySync(ctx, f)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		cmap := map[string]interface{}{}
+		for _, v := range cached {
+			cmap[v.ID] = struct{}{}
+		}
+
+        log.Println("D")
+
 		var wg sync.WaitGroup
 		for _, e := range events {
 
-			filter := nostr.Filter{
-				IDs:     []string{e.ID},
-				Authors: []string{pub},
-				Limit:   1, // There should only be one article with this ID.
-			}
-
-			ee, err := s.relay.QuerySync(ctx, filter)
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-			if len(ee) == 0 {
-
+			_, ok := cmap[e.ID]
+			if !ok {
 				wg.Add(1) // Be certain to Add before launching the goroutine!
 				go func(ev *nostr.Event) {
 					defer wg.Done()
@@ -126,6 +157,8 @@ func (s *Handler) cache(npub string) {
 
 		}
 		wg.Wait()
+
+        log.Println("E")
 	}
 
 	log.Println("DONE")

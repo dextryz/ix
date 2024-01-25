@@ -1,0 +1,11 @@
+<form class="search-container"
+    hx-get="/search"
+    hx-target="#cards"
+    hx-swap="innerHTML">
+
+    <input class="search-bar" name="keywords" type="search" placeholder="Keyword search"/>
+</form>
+
+<div id="cards" class="cards">
+    {{ template "events" . }}
+</div>

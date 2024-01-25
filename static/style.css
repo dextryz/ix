@@ -54,25 +54,29 @@ body {
     background: var(--clr-black);
 }
 
-main {
-    display: block;
-    padding: 1rem;
-    background: var(--clr-black);
+.body-container {
+    display: flex;
+    justify-content: center;
+    flex-flow: column wrap;
+    margin-top: 2rem;
+    padding: 1.5rem;
+    gap: 1rem;
 }
 
-.search {
-    display: flex:
-    flow-direction: column;
-    align-items: center;
-    max-width: 800px;
-    margin: 0 auto; /* Center the container */
-    padding: 1rem; 
+.main-container {
+    display: flex;
+    flex-flow: column wrap;
+    justify-content: space-between;
+    align-content: center;
+    gap: 1rem;
 }
 
 .search-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    max-width: 800px;
+    margin: 0 auto; /* Center the container */
 }
 
 .small {
@@ -126,15 +130,35 @@ main {
     display: flex;
     flex-direction: column;
     justify-content: start;
-    color: #ABB2BF;
+    color: var(--clr-text);
     text-align: left;
     max-width: 50rem;
     gap: 2rem;
     margin-inline: auto;
-    width: min(90%, 1000px);
+    width: min(90%, 800px);
 }
 
-.content h2 {
+h1 {
+    color: var(--clr-text);
+    font-size: 1.3rem;
+    font-weight: 500; /* bold is 700, normal is 400, this is semi-bold */
+    max-width: 800px;
+}
+
+ul {
+    font-size: normal;
+    color: var(--clr-text);
+    max-width: 801px;
+}
+
+section {
+    color: var(--clr-text);
+    font-size: 1rem;
+    max-width: 800px;
+}
+
+h2 {
+    color: var(--clr-text);
     font-size: large;
     font-weight: bold;
 }
@@ -171,7 +195,7 @@ a:hover {
     display: flex;
     flex-flow: column;
     color: #93a1a1;
-    border-radius: 1rem;
+    border-radius: 0.5rem;
     background: white;
     border-width: 0px;
     border-style: solid;
@@ -230,8 +254,9 @@ a:hover {
 footer {
     display: flex;
     justify-content: center;
-    color: #ABB2BF;
+    color: var(--clr-text);
     background: var(--clr-black);
+    padding-top: 1rem;
     padding-bottom: 1rem;
 }
 

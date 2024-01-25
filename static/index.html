@@ -11,35 +11,57 @@
 
 <body hx-boost="true">
 
-    <div class="search">
-        <form class="search-container"
-            hx-get="/events"
-            hx-target="#cards"
-            hx-swap="innerHTML">
+    <div class="body-container">
+        <div id="main-container" class="main-container">
 
-            <input class="search-bar" name="npub" type="search" placeholder="Enter npub"
-                hx-get="/validate"
-                hx-target="next .message"
-                hx-trigger="keyup delay:200ms changed"
-            />
+            <h1>
+                Ixian
+            </h1>
 
-            <input class="search-bar" name="keywords" type="search" placeholder="Keyword search"/>
+            <section>
+                View your articles published on <a href="https://www.nostr.com">nostr</a> in read-only mode from any web browser.
+                Simply enter your <em>npub</em> and press Enter. You can then search for specific articles by filtering keywords in your content.
+            </section>
 
-            <button type="submit" class="submit-button">Search</button>
+            <div class="search">
+                <form class="search-container"
+                    hx-get="/pull"
+                    hx-target="#main-container"
+                    hx-swap="innerHTML">
 
-        </form>
-        <small class="message"></small>
-    </div>
+                    <input class="search-bar" name="npub" type="search" placeholder="Paste npub and Enter"
+                        hx-get="/validate"
+                        hx-target="next .message"
+                        hx-trigger="keyup delay:200ms changed"
+                    />
+                </form>
+                <small class="message"></small>
+            </div>
 
-    <main>
-        <div id="cards" class="cards">
-            {{ template "events" . }}
+            <h1>
+                Focus
+            </h1>
+
+            <section>
+                The focus is to get the article you want in front of you ASAP. Therefore, this is a static site. All content is rendered server-side.
+                No client-side JavaScript bullshit.
+            </section>
+
+            <h1>
+                Notes
+            </h1>
+
+            <ul>
+                <li>You cannot edit your articles</li>
+                <li>Instead of using broken HTTP links or, god forbid, relative paths to <em>.md</em> files, reference notes with <a href="https://github.com/nostr-protocol/nips/blob/master/21.md">NIP-21</a> links.</li>
+            </ul>
+
         </div>
-    </main>
 
-    <footer>
-        <p>Made with <i class="fas fa-heart"></i> by <a href="https://github.com/dextryz">dextryz</a></p>
-    </footer>
+        <footer>
+            <p>Made with <i class="fas fa-heart"></i> by <a href="https://github.com/dextryz">dextryz</a></p>
+        </footer>
+    </div>
 
 </body>
 

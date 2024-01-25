@@ -52,7 +52,8 @@ func main() {
 
 	r.HandleFunc("/", h.Home).Methods("GET")
 	r.HandleFunc("/validate", h.Validate).Methods("GET")
-	r.HandleFunc("/events", h.Events).Methods("GET")
+	r.HandleFunc("/pull", h.Articles).Methods("GET")
+	r.HandleFunc("/search", h.Search).Methods("GET")
 	r.HandleFunc("/{id:[a-zA-Z0-9]+}", h.Article).Methods("GET")
 
 	s := &http.Server{
