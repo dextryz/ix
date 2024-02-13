@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -14,11 +16,12 @@ import (
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
+var ErrNotFound = errors.New("todo list not found")
+
 type Article struct {
-	Id          string // NIP-19 (note1...)
+	Id          string // NIP-19 (naddr...)
 	Image       string
 	Title       string
-	Npub        string
 	HashTags    []string // #focus #think without to the # in sstring
 	MdContent   string
 	HtmlContent string
@@ -34,6 +37,8 @@ func (s *Handler) Close() error {
 	s.relay.Close()
 	return nil
 }
+
+var KindHighlight = 9802
 
 func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
 
@@ -57,7 +62,7 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	// Last cached was 10 mins ago
 	ctx := context.Background()
-	since := nostr.Now() - 3600
+	since := nostr.Now() - 10
 	list, err := s.cache.QuerySync(ctx, nostr.Filter{Since: &since, Limit: 100})
 	if err != nil {
 		panic(err)
@@ -209,7 +214,7 @@ func (s *Handler) search(keywords string) []*Article {
 
 	notes := []*Article{}
 	for _, e := range events {
-		a, err := eventToArticle(e)
+		a, err := s.eventToArticle(e)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -224,44 +229,52 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 	log.Println("retrieving article from cache")
 
 	vars := mux.Vars(r)
-	nid := vars["id"]
+	nid := vars["naddr"]
 
 	// Convert NIP-19 nevent123... to NIP-01 hex ID
-	_, v, err := nip19.Decode(nid)
+	prefix, data, err := nip19.Decode(nid)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	npub := "npub14ge829c4pvgx24c35qts3sv82wc2xwcmgng93tzp6d52k9de2xgqq0y4jk"
-	_, pk, err := nip19.Decode(npub)
-	if err != nil {
-		panic(err)
+	if prefix != "naddr" {
+		log.Fatalln(err)
+	}
+	ep := data.(nostr.EntityPointer)
+	if ep.Kind != nostr.KindArticle {
+		log.Fatalln(err)
 	}
 
-	log.Print(nid)
+	log.Printf("NADDR (Article): %s", nid)
 
 	filter := nostr.Filter{
-		IDs:     []string{v.(string)},
-		Authors: []string{pk.(string)},
-		Limit:   5, // There should only be one article with this ID.
+		Authors: []string{ep.PublicKey},
+		Kinds:   []int{ep.Kind},
+		Tags: nostr.TagMap{
+			"d": []string{ep.Identifier},
+			//"a": []string{fmt.Sprintf("%d:%s:%s", ep.Kind, ep.PublicKey, ep.Identifier)},
+		},
+		Limit: 10, // There should only be one article with this ID.
 	}
 
+	fmt.Println(filter)
+
+	// 	ctx := context.Background()
+	// 	events, err := s.relay.QuerySync(ctx, filter)
+	// 	if err != nil {
+	// 		log.Fatalln(err)
+	// 	}
 	ctx := context.Background()
-	events, err := s.relay.QuerySync(ctx, filter)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	pool := nostr.NewSimplePool(ctx)
+	events := pool.QuerySingle(ctx, []string{"wss://relay.damus.io/", "wss://relay.highlighter.com/", "wss://nostr-01.yakihonne.com"}, filter)
 
 	log.Print(events)
 
 	articles := []*Article{}
-	for _, e := range events {
-		a, err := eventToArticle(e)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		articles = append(articles, a)
+	a, err := s.eventToArticle(events.Event)
+	if err != nil {
+		log.Fatalln(err)
 	}
+	articles = append(articles, a)
 
 	tmpl, err := template.ParseFiles("static/article.html")
 	if err != nil {
@@ -299,34 +312,69 @@ func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func eventToArticle(e *nostr.Event) (*Article, error) {
+func (s *Handler) eventToArticle(e *nostr.Event) (*Article, error) {
+
+	// Encode NIP-01 event id to NIP-19 note id
+	var identifier string
+	for _, tag := range e.Tags {
+		if tag.Key() == "d" {
+			identifier = tag.Value()
+		}
+	}
+
+	naddr, err := nip19.EncodeEntity(e.PubKey, e.Kind, identifier, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("\nEVENT: %v\n", e)
+	fmt.Printf("\nIdentifier: %s\n", identifier)
+	fmt.Printf("\nNAddr: %s\n", naddr)
+
+	// TODO: Add highlisth div here
+	content := mdToHtml(e.Content)
+
+	// 1. Find all kind 9802 event that are linked to the article ID.
+	tag := fmt.Sprintf("%d:%s:%s", e.Kind, e.PubKey, identifier)
+	filter := nostr.Filter{
+		Authors: []string{e.PubKey},
+		Kinds:   []int{KindHighlight},
+		Tags: nostr.TagMap{
+			"a": []string{tag},
+		},
+	}
+
+	// FIXME
+	ctx := context.Background()
+	pool := nostr.NewSimplePool(ctx)
+	event := pool.QuerySingle(ctx, []string{"wss://relay.damus.io/", "wss://relay.highlighter.com/"}, filter)
+	// 	if events == nil {
+	// 		return nil, ErrNotFound
+	// 	}
+
+	log.Println("\nEVENTS")
+	log.Println(event)
+
+	//substring := "The primitives of value generation is the effective management of resources."
+	substring := "looked"
+
+	// 2. Replace the event content with a span and CSS class
+	if strings.Contains(content, substring) {
+		log.Println("SUBSTRING found")
+		content = strings.ReplaceAll(content, substring, fmt.Sprintf("<span class='highlight'>%s</span>", substring))
+	}
 
 	// Sample Unix timestamp: 1635619200 (represents 2021-10-30)
 	unixTimestamp := int64(e.CreatedAt)
-
 	// Convert Unix timestamp to time.Time
 	t := time.Unix(unixTimestamp, 0)
-
 	// Format time.Time to "yyyy-mm-dd"
 	createdAt := t.Format("2006-01-02")
 
-	// Encode NIP-01 event id to NIP-19 note id
-	id, err := nip19.EncodeNote(e.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Encode NIP-01 pubkey to NIP-19 npub
-	npub, err := nip19.EncodePublicKey(e.PubKey)
-	if err != nil {
-		return nil, err
-	}
-
 	a := &Article{
-		Id:          id,
-		Npub:        npub,
+		Id:          naddr,
 		MdContent:   e.Content,
-		HtmlContent: mdToHtml(e.Content),
+		HtmlContent: content,
 		PublishedAt: createdAt,
 	}
 

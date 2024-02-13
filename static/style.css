@@ -267,3 +267,12 @@ main {
     font-size: 16px;
     color: var(--clr-text);
 }
+
+.highlight {
+    text-decoration: underline; /* Underline the text */
+    text-decoration-color: var(--clr-pink); /* Optional: specify the color of the underline */
+    text-decoration-thickness: 2px; /* Optional: specify the thickness of the underline */
+    text-decoration-style: solid; /* Optional: style of the underline (solid, double, dotted, dashed) */
+    text-underline-offset: 3px; /* Move the underline below the text */
+    font-weight: bold; /* Make the text bold to stand out */
+}

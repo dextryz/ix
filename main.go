@@ -57,7 +57,8 @@ func main() {
 	r.HandleFunc("/validate", h.Validate).Methods("GET")
 	r.HandleFunc("/pull", h.Articles).Methods("GET")
 	r.HandleFunc("/search", h.Search).Methods("GET")
-	r.HandleFunc("/{id:[a-zA-Z0-9]+}", h.Article).Methods("GET")
+	r.HandleFunc("/{naddr:[a-zA-Z0-9]+}", h.Article).Methods("GET")
+	//r.HandleFunc("/{id:[a-zA-Z0-9]+}", h.Highlight).Methods("GET")
 
 	s := &http.Server{
 		Addr:    "127.0.0.1:8080",
