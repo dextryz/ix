@@ -160,15 +160,13 @@ h2 {
 
 .inline {
     color: var(--clr-red);
-    text-decoration: none; /* Removes the underline */
-}
-
-.inline:visited {
-    color: #C678DD;
+    font-weight: normal;
+    text-decoration: none;
 }
 
 .inline:hover {
-    color: #61AFEF;
+    color: var(--clr-blue);
+    font-weight: normal;
 }
 
 a {
@@ -274,5 +272,8 @@ main {
     text-decoration-thickness: 2px; /* Optional: specify the thickness of the underline */
     text-decoration-style: solid; /* Optional: style of the underline (solid, double, dotted, dashed) */
     text-underline-offset: 3px; /* Move the underline below the text */
-    font-weight: bold; /* Make the text bold to stand out */
+}
+
+.highlight:hover {
+    text-decoration-thickness: 4px; /* Optional: specify the thickness of the underline */
 }

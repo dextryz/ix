@@ -7,7 +7,7 @@
     <div class="card-body">
 
         <header class="card-header"
-            hx-get="{{ .Id }}"
+            hx-get="articles/{{ .Id }}"
             hx-push-url="true"
             hx-target="body"
             hx-swap="outerHTML">

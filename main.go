@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/nbd-wtf/go-nostr"
 )
 
@@ -48,21 +47,23 @@ func main() {
 		cache: cache,
 	}
 
-	r := mux.NewRouter()
+	mux := http.NewServeMux()
 
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
-	r.PathPrefix("/fonts/").Handler(http.StripPrefix("/fonts/", http.FileServer(http.Dir("./fonts"))))
+	fs := http.FileServer(http.Dir("./static"))
+	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	r.HandleFunc("/", h.Home).Methods("GET")
-	r.HandleFunc("/validate", h.Validate).Methods("GET")
-	r.HandleFunc("/pull", h.Articles).Methods("GET")
-	r.HandleFunc("/search", h.Search).Methods("GET")
-	r.HandleFunc("/{naddr:[a-zA-Z0-9]+}", h.Article).Methods("GET")
-	//r.HandleFunc("/{id:[a-zA-Z0-9]+}", h.Highlight).Methods("GET")
+	fs = http.FileServer(http.Dir("./fonts"))
+	mux.Handle("/fonts/", http.StripPrefix("/fonts/", fs))
+
+	mux.HandleFunc("/", h.Home)
+	mux.HandleFunc("GET /articles", h.Articles)
+	mux.HandleFunc("GET /validate", h.Validate)
+	mux.HandleFunc("GET /search", h.Search)
+	mux.HandleFunc("GET /articles/{naddr}", h.Article)
 
 	s := &http.Server{
 		Addr:    "127.0.0.1:8080",
-		Handler: r,
+		Handler: mux,
 	}
 
 	// Create a channel to listen for OS signals

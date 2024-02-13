@@ -11,7 +11,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
@@ -228,8 +227,7 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("retrieving article from cache")
 
-	vars := mux.Vars(r)
-	nid := vars["naddr"]
+	nid := r.PathValue("naddr")
 
 	// Convert NIP-19 nevent123... to NIP-01 hex ID
 	prefix, data, err := nip19.Decode(nid)
@@ -283,33 +281,6 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tmpl.Execute(w, articles[0])
-}
-
-func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {
-
-	pk := r.URL.Query().Get("search")
-
-	if pk != "" {
-
-		prefix, _, err := nip19.Decode(pk)
-
-		if err != nil {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<span class="message error">Invalid entity</span>`))
-			return
-		}
-
-		if prefix[0] != 'n' {
-			log.Println("start with npub")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<span class="message error">Start with npub</span>`))
-			return
-		}
-
-		// Add text to show valid if you want to.
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<span class="message success"> </span>`))
-	}
 }
 
 func (s *Handler) eventToArticle(e *nostr.Event) (*Article, error) {
@@ -392,4 +363,31 @@ func (s *Handler) eventToArticle(e *nostr.Event) (*Article, error) {
 	}
 
 	return a, nil
+}
+
+func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {
+
+	pk := r.URL.Query().Get("search")
+
+	if pk != "" {
+
+		prefix, _, err := nip19.Decode(pk)
+
+		if err != nil {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`<span class="message error">Invalid entity</span>`))
+			return
+		}
+
+		if prefix[0] != 'n' {
+			log.Println("start with npub")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`<span class="message error">Start with npub</span>`))
+			return
+		}
+
+		// Add text to show valid if you want to.
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<span class="message success"> </span>`))
+	}
 }
