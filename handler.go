@@ -6,29 +6,21 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"text/template"
-	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/dextryz/nip23"
+	"github.com/dextryz/nip84"
+	nos "github.com/dextryz/nostr"
+
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 var ErrNotFound = errors.New("todo list not found")
 
-type Article struct {
-	Id          string // NIP-19 (naddr...)
-	Image       string
-	Title       string
-	HashTags    []string // #focus #think without to the # in sstring
-	MdContent   string
-	HtmlContent string
-	PublishedAt string
-}
-
 type Handler struct {
+	cfg   *nos.Config
 	relay *nostr.Relay
 	cache *nostr.Relay
 }
@@ -38,16 +30,12 @@ func (s *Handler) Close() error {
 	return nil
 }
 
-var KindHighlight = 9802
-
 func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
-
 	tmpl, err := template.ParseFiles("static/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	err = tmpl.ExecuteTemplate(w, "index.html", "")
 	if err != nil {
 		fmt.Println("Error executing template:", err)
@@ -62,7 +50,7 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	// Last cached was 10 mins ago
 	ctx := context.Background()
-	since := nostr.Now() - 10
+	since := nostr.Now() - 3600
 	list, err := s.cache.QuerySync(ctx, nostr.Filter{Since: &since, Limit: 100})
 	if err != nil {
 		panic(err)
@@ -85,15 +73,12 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Handler) Search(w http.ResponseWriter, r *http.Request) {
-
 	notes := s.search(r.URL.Query().Get("keywords"))
-
 	tmpl, err := template.ParseFiles("static/card.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	tmpl.Execute(w, notes)
 }
 
@@ -103,7 +88,7 @@ func (s *Handler) store(npub string) {
 
 	ctx := context.Background()
 
-	for _, relay := range []string{"wss://nostr-01.yakihonne.com", "wss://relay.damus.io/"} {
+	for _, relay := range s.cfg.Relays {
 
 		r, err := nostr.RelayConnect(ctx, relay)
 		if err != nil {
@@ -156,7 +141,7 @@ func (s *Handler) store(npub string) {
 
 		log.Println("D")
 
-		_, sk, err := nip19.Decode(IXIAN_SK)
+		_, sk, err := nip19.Decode(s.cfg.Nsec)
 		if err != nil {
 			panic(err)
 		}
@@ -195,9 +180,9 @@ func (s *Handler) store(npub string) {
 	log.Println("DONE")
 }
 
-func (s *Handler) search(keywords string) []*Article {
+func (s *Handler) search(keywords string) []*nip23.Article {
 
-	log.Printf("Searching for keywords: [%s]", keywords)
+	log.Printf("searching for keywords: [%s]", keywords)
 
 	filter := nostr.Filter{
 		Kinds:  []int{nostr.KindArticle},
@@ -210,11 +195,11 @@ func (s *Handler) search(keywords string) []*Article {
 		log.Fatalln(err)
 	}
 
-	log.Printf("Article found: %d with keywords: %s", len(events), keywords)
+	log.Printf("article found: %d with keywords: %s", len(events), keywords)
 
-	notes := []*Article{}
+	notes := []*nip23.Article{}
 	for _, e := range events {
-		a, err := s.eventToArticle(e)
+		a, err := nip23.ToArticle(e)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -228,53 +213,29 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("retrieving article from cache")
 
-	vars := mux.Vars(r)
-	nid := vars["naddr"]
+	naddr := r.PathValue("naddr")
 
-	// Convert NIP-19 nevent123... to NIP-01 hex ID
-	prefix, data, err := nip19.Decode(nid)
+	a, err := nip23.RequestArticle(s.cfg, naddr)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if prefix != "naddr" {
-		log.Fatalln(err)
-	}
-	ep := data.(nostr.EntityPointer)
-	if ep.Kind != nostr.KindArticle {
-		log.Fatalln(err)
-	}
 
-	log.Printf("NADDR (Article): %s", nid)
-
-	filter := nostr.Filter{
-		Authors: []string{ep.PublicKey},
-		Kinds:   []int{ep.Kind},
-		Tags: nostr.TagMap{
-			"d": []string{ep.Identifier},
-			//"a": []string{fmt.Sprintf("%d:%s:%s", ep.Kind, ep.PublicKey, ep.Identifier)},
-		},
-		Limit: 10, // There should only be one article with this ID.
-	}
-
-	fmt.Println(filter)
-
-	// 	ctx := context.Background()
-	// 	events, err := s.relay.QuerySync(ctx, filter)
-	// 	if err != nil {
-	// 		log.Fatalln(err)
-	// 	}
-	ctx := context.Background()
-	pool := nostr.NewSimplePool(ctx)
-	events := pool.QuerySingle(ctx, []string{"wss://relay.damus.io/", "wss://relay.highlighter.com/", "wss://nostr-01.yakihonne.com"}, filter)
-
-	log.Print(events)
-
-	articles := []*Article{}
-	a, err := s.eventToArticle(events.Event)
+	a, err = MdToHtml(a)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	articles = append(articles, a)
+
+	highlights, err := nip84.RequestHighlights(s.cfg, naddr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for _, h := range highlights {
+		a, err = ReplaceHighlight(h, a)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
 
 	tmpl, err := template.ParseFiles("static/article.html")
 	if err != nil {
@@ -282,7 +243,7 @@ func (s *Handler) Article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl.Execute(w, articles[0])
+	tmpl.Execute(w, a)
 }
 
 func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {
@@ -299,7 +260,7 @@ func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if prefix[0] != 'n' {
+		if prefix != "npub" {
 			log.Println("start with npub")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`<span class="message error">Start with npub</span>`))
@@ -310,86 +271,4 @@ func (s *Handler) Validate(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`<span class="message success"> </span>`))
 	}
-}
-
-func (s *Handler) eventToArticle(e *nostr.Event) (*Article, error) {
-
-	// Encode NIP-01 event id to NIP-19 note id
-	var identifier string
-	for _, tag := range e.Tags {
-		if tag.Key() == "d" {
-			identifier = tag.Value()
-		}
-	}
-
-	naddr, err := nip19.EncodeEntity(e.PubKey, e.Kind, identifier, []string{})
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("\nEVENT: %v\n", e)
-	fmt.Printf("\nIdentifier: %s\n", identifier)
-	fmt.Printf("\nNAddr: %s\n", naddr)
-
-	// TODO: Add highlisth div here
-	content := mdToHtml(e.Content)
-
-	// 1. Find all kind 9802 event that are linked to the article ID.
-	tag := fmt.Sprintf("%d:%s:%s", e.Kind, e.PubKey, identifier)
-	filter := nostr.Filter{
-		Authors: []string{e.PubKey},
-		Kinds:   []int{KindHighlight},
-		Tags: nostr.TagMap{
-			"a": []string{tag},
-		},
-	}
-
-	// FIXME
-	ctx := context.Background()
-	pool := nostr.NewSimplePool(ctx)
-	event := pool.QuerySingle(ctx, []string{"wss://relay.damus.io/", "wss://relay.highlighter.com/"}, filter)
-	// 	if events == nil {
-	// 		return nil, ErrNotFound
-	// 	}
-
-	log.Println("\nEVENTS")
-	log.Println(event)
-
-	//substring := "The primitives of value generation is the effective management of resources."
-	substring := "looked"
-
-	// 2. Replace the event content with a span and CSS class
-	if strings.Contains(content, substring) {
-		log.Println("SUBSTRING found")
-		content = strings.ReplaceAll(content, substring, fmt.Sprintf("<span class='highlight'>%s</span>", substring))
-	}
-
-	// Sample Unix timestamp: 1635619200 (represents 2021-10-30)
-	unixTimestamp := int64(e.CreatedAt)
-	// Convert Unix timestamp to time.Time
-	t := time.Unix(unixTimestamp, 0)
-	// Format time.Time to "yyyy-mm-dd"
-	createdAt := t.Format("2006-01-02")
-
-	a := &Article{
-		Id:          naddr,
-		MdContent:   e.Content,
-		HtmlContent: content,
-		PublishedAt: createdAt,
-	}
-
-	for _, t := range e.Tags {
-		if t.Key() == "image" {
-			a.Image = t.Value()
-		}
-		if t.Key() == "title" {
-			a.Title = t.Value()
-		}
-		// TODO: Check the # prefix and filter in tags.
-		if t.Key() == "t" {
-			a.HashTags = append(a.HashTags, t.Value())
-		}
-	}
-
-	return a, nil
 }

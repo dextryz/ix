@@ -7,7 +7,7 @@
     <div class="card-body">
 
         <header class="card-header"
-            hx-get="{{ .Id }}"
+            hx-get="articles/{{ .Naddr }}"
             hx-push-url="true"
             hx-target="body"
             hx-swap="outerHTML">
@@ -15,7 +15,7 @@
         </header>
 
         <div class="card-tags">
-            {{ range .HashTags }}
+            {{ range .Tags }}
                 <h2 class="card-tag"
                     hx-get="hashtag/{{ . }}"
                     hx-push-url="true"

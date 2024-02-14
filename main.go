@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,25 +10,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
+	nos "github.com/dextryz/nostr"
 	"github.com/nbd-wtf/go-nostr"
 )
 
-func StringEnv(key string) string {
-	value, ok := os.LookupEnv(key)
-	if !ok {
-		log.Fatalf("address env variable \"%s\" not set, usual", key)
-	}
-	return value
-}
-
 var (
-	IXIAN_SK = StringEnv("IXIAN_SK")
+	ADDR = "127.0.0.1"
+	PORT = "8080"
 )
 
 func main() {
 
-	log.Println("Starting...")
+	log.Println("starting...")
 
 	ctx := context.Background()
 
@@ -43,26 +37,39 @@ func main() {
 		panic(err)
 	}
 
+	path, ok := os.LookupEnv("NOSTR")
+	if !ok {
+		log.Fatalln("NOSTR env var not set")
+	}
+
+	cfg, err := nos.LoadConfig(path)
+	if err != nil {
+		panic(err)
+	}
+
 	h := Handler{
+		cfg:   cfg,
 		relay: relay,
 		cache: cache,
 	}
 
-	r := mux.NewRouter()
+	mux := http.NewServeMux()
 
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
-	r.PathPrefix("/fonts/").Handler(http.StripPrefix("/fonts/", http.FileServer(http.Dir("./fonts"))))
+	fs := http.FileServer(http.Dir("./static"))
+	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	r.HandleFunc("/", h.Home).Methods("GET")
-	r.HandleFunc("/validate", h.Validate).Methods("GET")
-	r.HandleFunc("/pull", h.Articles).Methods("GET")
-	r.HandleFunc("/search", h.Search).Methods("GET")
-	r.HandleFunc("/{naddr:[a-zA-Z0-9]+}", h.Article).Methods("GET")
-	//r.HandleFunc("/{id:[a-zA-Z0-9]+}", h.Highlight).Methods("GET")
+	fs = http.FileServer(http.Dir("./fonts"))
+	mux.Handle("/fonts/", http.StripPrefix("/fonts/", fs))
+
+	mux.HandleFunc("/", h.Home)
+	mux.HandleFunc("GET /articles", h.Articles)
+	mux.HandleFunc("GET /validate", h.Validate)
+	mux.HandleFunc("GET /search", h.Search)
+	mux.HandleFunc("GET /articles/{naddr}", h.Article)
 
 	s := &http.Server{
-		Addr:    "127.0.0.1:8080",
-		Handler: r,
+		Addr:    fmt.Sprintf("%s:%s", ADDR, PORT),
+		Handler: mux,
 	}
 
 	// Create a channel to listen for OS signals
@@ -92,5 +99,5 @@ func main() {
 		log.Fatalf("server shutdown failed:%+v", err)
 	}
 
-	log.Println("Server gracefully stopped")
+	log.Println("server gracefully stopped")
 }
