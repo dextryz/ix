@@ -1,17 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"regexp"
+	"strings"
 
+	"github.com/dextryz/nip23"
+	"github.com/dextryz/nip84"
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
 )
 
-func mdToHtml(md string) string {
+func MdToHtml(a *nip23.Article) (*nip23.Article, error) {
 
-	text, err := swapLinks(md)
+	text, err := ReplaceReferences(a.Content)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -28,12 +32,20 @@ func mdToHtml(md string) string {
 
 	c := markdown.Render(doc, renderer)
 
-	return string(c)
+	return &nip23.Article{
+		Naddr:      a.Naddr,
+		Identifier: a.Identifier,
+		Title:      a.Title,
+		Content:    string(c),
+		Tags:       a.Tags,
+		Events:     a.Events,
+		Urls:       a.Urls,
+	}, nil
 }
 
 // text := "Click [me](nostr:nevent17915d512457e4bc461b54ba95351719c150946ed4aa00b1d83a263deca69dae) to"
 // replacement := `<a href="#" hx-get="article/$2" hx-push-url="true" hx-target="body" hx-swap="outerHTML">$1</a>`
-func swapLinks(text string) (string, error) {
+func ReplaceReferences(text string) (string, error) {
 
 	// Define the regular expression pattern to match the markdown-like link
 	//pattern := `\[(.*?)\]\((.*?)\)`
@@ -54,4 +66,24 @@ func swapLinks(text string) (string, error) {
 	result := re.ReplaceAllString(text, replacement)
 
 	return result, nil
+}
+
+func ReplaceHighlight(h nip84.Highlight, a *nip23.Article) (*nip23.Article, error) {
+
+	c := a.Content
+	if strings.Contains(c, h.Content) {
+		log.Println("Highlight found")
+		txt := fmt.Sprintf("<span class='highlight'>%s</span>", h.Content)
+		c = strings.ReplaceAll(c, h.Content, txt)
+	}
+
+	return &nip23.Article{
+		Naddr:      a.Naddr,
+		Identifier: a.Identifier,
+		Title:      a.Title,
+		Content:    c,
+		Tags:       a.Tags,
+		Events:     a.Events,
+		Urls:       a.Urls,
+	}, nil
 }

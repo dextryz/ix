@@ -3,6 +3,9 @@ module github.com/dextryz/ixian
 go 1.22.0
 
 require (
+	github.com/dextryz/nip23 v0.0.0-00010101000000-000000000000
+	github.com/dextryz/nip84 v0.0.0-00010101000000-000000000000
+	github.com/dextryz/nostr v0.0.0-00010101000000-000000000000
 	github.com/gomarkdown/markdown v0.0.0-20231222211730-1d6d20845b47
 	github.com/nbd-wtf/go-nostr v0.28.6
 )
@@ -25,3 +28,9 @@ require (
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 )
+
+replace github.com/dextryz/nostr => ../nostr
+
+replace github.com/dextryz/nip23 => ../nip23
+
+replace github.com/dextryz/nip84 => ../nip84

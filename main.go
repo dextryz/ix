@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,24 +10,18 @@ import (
 	"syscall"
 	"time"
 
+	nos "github.com/dextryz/nostr"
 	"github.com/nbd-wtf/go-nostr"
 )
 
-func StringEnv(key string) string {
-	value, ok := os.LookupEnv(key)
-	if !ok {
-		log.Fatalf("address env variable \"%s\" not set, usual", key)
-	}
-	return value
-}
-
 var (
-	IXIAN_SK = StringEnv("IXIAN_SK")
+	ADDR = "127.0.0.1"
+	PORT = "8080"
 )
 
 func main() {
 
-	log.Println("Starting...")
+	log.Println("starting...")
 
 	ctx := context.Background()
 
@@ -42,7 +37,18 @@ func main() {
 		panic(err)
 	}
 
+	path, ok := os.LookupEnv("NOSTR")
+	if !ok {
+		log.Fatalln("NOSTR env var not set")
+	}
+
+	cfg, err := nos.LoadConfig(path)
+	if err != nil {
+		panic(err)
+	}
+
 	h := Handler{
+		cfg:   cfg,
 		relay: relay,
 		cache: cache,
 	}
@@ -62,7 +68,7 @@ func main() {
 	mux.HandleFunc("GET /articles/{naddr}", h.Article)
 
 	s := &http.Server{
-		Addr:    "127.0.0.1:8080",
+		Addr:    fmt.Sprintf("%s:%s", ADDR, PORT),
 		Handler: mux,
 	}
 
@@ -93,5 +99,5 @@ func main() {
 		log.Fatalf("server shutdown failed:%+v", err)
 	}
 
-	log.Println("Server gracefully stopped")
+	log.Println("server gracefully stopped")
 }
