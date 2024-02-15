@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -65,13 +64,14 @@ func main() {
 		panic(err)
 	}
 
+	es := EventStore{
+		Store:       db,
+		lastUpdated: make(map[string]nostr.Timestamp),
+	}
+
 	h := Handler{
-		wg:        &sync.WaitGroup{},
-		cfg:       cfg,
-		m:         &sync.Map{},
-		h:         &sync.Map{},
-		db:        db,
-		timestamp: make(map[string]nostr.Timestamp),
+		cfg: cfg,
+		db:  &es,
 	}
 
 	mux := http.NewServeMux()
@@ -85,7 +85,7 @@ func main() {
 	mux.HandleFunc("/", h.Home)
 	mux.HandleFunc("GET /articles", h.Articles)
 	mux.HandleFunc("GET /validate", h.Validate)
-	mux.HandleFunc("GET /search", h.Search)
+	//mux.HandleFunc("GET /search", h.Search)
 	mux.HandleFunc("GET /articles/{naddr}", h.Article)
 
 	s := &http.Server{
