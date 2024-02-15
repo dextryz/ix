@@ -59,14 +59,12 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("pulling articles for %s", npub)
 
-	articles := pipe.New(s.cfg.Relays).Articles([]string{npub}, s.db.lastUpdated[npub]).Query().WithIdentifier().Sort()
+	articles := pipe.New(s.cfg.Relays).Articles([]string{npub}, s.db.lastUpdated[npub]).Query().WithIdentifier()
 
 	aa := articles.Events()
 
 	// update timestamp
 	if len(aa) > 0 {
-		s.db.lastUpdated[npub] = aa[len(aa)-1].CreatedAt + 3
-
 		// Get all the NIP-84 events of the set of NIP-23 articles
 		// FIXME has to be pipeline from FromStore()
 		highlights := articles.Highlights().Query()
@@ -78,10 +76,15 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, e := range aa {
+
 			err := s.db.SaveEvent(ctx, e)
 			if err != nil {
 				log.Fatalln(err)
 			}
+
+            if e.CreatedAt > s.db.lastUpdated[npub] {
+                s.db.lastUpdated[npub] = e.CreatedAt + 1
+            }
 		}
 	}
 
