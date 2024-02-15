@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"sync"
 	"text/template"
 
@@ -20,9 +21,11 @@ import (
 var ErrNotFound = errors.New("todo list not found")
 
 type Handler struct {
+	wg    *sync.WaitGroup
 	cfg   *nos.Config
 	relay *nostr.Relay
 	cache *nostr.Relay
+	m     *sync.Map
 }
 
 func (s *Handler) Close() error {
@@ -48,18 +51,7 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("pulling articles for %s", npub)
 
-	// Last cached was 10 mins ago
-	ctx := context.Background()
-	since := nostr.Now() - 3600
-	list, err := s.cache.QuerySync(ctx, nostr.Filter{Since: &since, Limit: 100})
-	if err != nil {
-		panic(err)
-	}
-
-	// If no events was pulled and cached in the last 10 mins.
-	if len(list) == 0 {
-		s.store(npub)
-	}
+	s.store(npub)
 
 	notes := s.search("")
 
@@ -88,94 +80,51 @@ func (s *Handler) store(npub string) {
 
 	ctx := context.Background()
 
-	for _, relay := range s.cfg.Relays {
+	for _, url := range s.cfg.Relays {
 
-		r, err := nostr.RelayConnect(ctx, relay)
-		if err != nil {
-			panic(err)
-		}
+		s.wg.Add(1)
+		go func(wg *sync.WaitGroup, url string) {
+			defer wg.Done()
 
-		_, v, err := nip19.Decode(npub)
-		if err != nil {
-			panic(err)
-		}
-
-		var filter nostr.Filter
-		pub := v.(string)
-		filter = nostr.Filter{
-			Kinds:   []int{nostr.KindArticle},
-			Authors: []string{pub},
-			Limit:   1000,
-		}
-
-		log.Println("A")
-
-		events, err := r.QuerySync(ctx, filter)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		log.Println("B")
-
-		ids := []string{}
-		for _, e := range events {
-			ids = append(ids, e.ID)
-		}
-
-		f := nostr.Filter{
-			IDs:     ids,
-			Authors: []string{pub},
-			Limit:   1, // There should only be one article with this ID.
-		}
-
-		log.Println("C")
-
-		cached, err := s.relay.QuerySync(ctx, f)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		cmap := map[string]interface{}{}
-		for _, v := range cached {
-			cmap[v.ID] = struct{}{}
-		}
-
-		log.Println("D")
-
-		_, sk, err := nip19.Decode(s.cfg.Nsec)
-		if err != nil {
-			panic(err)
-		}
-
-		p := nostr.Event{CreatedAt: nostr.Now()}
-		p.Sign(sk.(string))
-
-		// Store the time when event was cached
-		err = s.cache.Publish(ctx, p)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		var wg sync.WaitGroup
-		for _, e := range events {
-
-			_, ok := cmap[e.ID]
-			if !ok {
-				wg.Add(1) // Be certain to Add before launching the goroutine!
-				go func(ev *nostr.Event) {
-					defer wg.Done()
-
-					err = s.relay.Publish(ctx, *ev)
-					if err != nil {
-						log.Fatalln(err)
-					}
-				}(e)
+			r, err := nostr.RelayConnect(ctx, url)
+			if err != nil {
+				panic(err)
 			}
 
-		}
-		wg.Wait()
+			_, v, err := nip19.Decode(npub)
+			if err != nil {
+				panic(err)
+			}
+
+			var filter nostr.Filter
+			pub := v.(string)
+			filter = nostr.Filter{
+				Kinds:   []int{nostr.KindArticle},
+				Authors: []string{pub},
+				Limit:   1000,
+			}
+
+			log.Println("A")
+
+			events, err := r.QuerySync(ctx, filter)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			for _, e := range events {
+				var identifier string
+				for _, t := range e.Tags {
+					if t.Key() == "d" {
+						identifier = t.Value()
+					}
+				}
+				s.m.Store(identifier, e)
+			}
+		}(s.wg, url)
 
 		log.Println("E")
 	}
+	s.wg.Wait()
 
 	log.Println("DONE")
 }
@@ -183,23 +132,30 @@ func (s *Handler) store(npub string) {
 func (s *Handler) search(keywords string) []*nip23.Article {
 
 	log.Printf("searching for keywords: [%s]", keywords)
-
-	filter := nostr.Filter{
-		Kinds:  []int{nostr.KindArticle},
-		Search: keywords,
-		Limit:  1000,
-	}
-
-	events, err := s.relay.QuerySync(context.Background(), filter)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	log.Printf("article found: %d with keywords: %s", len(events), keywords)
+	keys := []string{}
+	s.m.Range(func(k, v any) bool {
+		keys = append(keys, k.(string))
+		return true
+	})
+	sort.Slice(keys, func(i, j int) bool {
+		lhs, ok := s.m.Load(keys[i])
+		if !ok {
+			return false
+		}
+		rhs, ok := s.m.Load(keys[j])
+		if !ok {
+			return false
+		}
+		return lhs.(*nostr.Event).CreatedAt.Time().Before(rhs.(*nostr.Event).CreatedAt.Time())
+	})
 
 	notes := []*nip23.Article{}
-	for _, e := range events {
-		a, err := nip23.ToArticle(e)
+	for _, key := range keys {
+		vv, ok := s.m.Load(key)
+		if !ok {
+			continue
+		}
+		a, err := nip23.ToArticle(vv.(*nostr.Event))
 		if err != nil {
 			log.Fatalln(err)
 		}

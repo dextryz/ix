@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -48,9 +49,11 @@ func main() {
 	}
 
 	h := Handler{
+		wg:    &sync.WaitGroup{},
 		cfg:   cfg,
 		relay: relay,
 		cache: cache,
+		m:     &sync.Map{},
 	}
 
 	mux := http.NewServeMux()
