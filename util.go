@@ -68,7 +68,7 @@ func ReplaceReferences(text string) (string, error) {
 	return result, nil
 }
 
-func ReplaceHighlight(h nip84.Highlight, a *nip23.Article) (*nip23.Article, error) {
+func ReplaceHighlight(h *nip84.Highlight, a *nip23.Article) (*nip23.Article, error) {
 
 	c := a.Content
 	if strings.Contains(c, h.Content) {
