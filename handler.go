@@ -28,11 +28,12 @@ type Tag struct {
 }
 
 type Handler struct {
-	wg  *sync.WaitGroup
-	cfg *nos.Config
-	m   *sync.Map
-	h   *sync.Map
-	db  eventstore.Store
+	wg        *sync.WaitGroup
+	cfg       *nos.Config
+	m         *sync.Map
+	h         *sync.Map
+	db        eventstore.Store
+	timestamp map[string]nostr.Timestamp
 }
 
 func (s *Handler) Close() error {
@@ -59,40 +60,67 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("pulling articles for %s", npub)
 
-	articles := pipe.New(s.cfg.Relays).Articles([]string{npub}).Query().WithIdentifier()
+	articles := pipe.New(s.cfg.Relays).Articles([]string{npub}, s.timestamp[npub]).Query().WithIdentifier().Sort()
 	//articles.Stdout()
 
-	notes := []*nip23.Article{}
-	for _, e := range articles.Events() {
+	aa := articles.Events()
 
+	// update timestamp
+	if len(aa) > 0 {
+		s.timestamp[npub] = aa[len(aa)-1].CreatedAt + 60
+	}
+
+	for _, e := range aa {
 		err := s.db.SaveEvent(ctx, e)
 		if err != nil {
 			log.Fatalln(err)
 		}
+	}
 
-		a, err := nip23.ToArticle(e)
+    // Storage
+
+    _, pk, err := nip19.Decode(npub)
+    if err != nil {
+        panic(err)
+    }
+
+	filter := nostr.Filter{
+		Kinds: []int{nostr.KindArticle},
+        Authors: []string{pk.(string)},
+        Limit: 500,
+	}
+
+	ch, err := s.db.QueryEvents(ctx, filter)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Println(len(ch))
+
+	notes := []*nip23.Article{}
+	for e := range ch {
+        a, err := nip23.ToArticle(e)
 		if err != nil {
 			log.Fatalln(err)
 		}
 		notes = append(notes, a)
 	}
 
-	fmt.Println(len(notes))
 
 	//fmt.Printf("\n\n\nHIGHLIGHTS\n\n\n")
 
-	// Get all the NIP-84 events of the set of NIP-23 articles
-	highlights := articles.Highlights().Query()
-	//highlights.Stdout()
-
-	for _, h := range highlights.Events() {
-		err := s.db.SaveEvent(ctx, h)
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}
-
-	fmt.Println("moving on")
+// 	// Get all the NIP-84 events of the set of NIP-23 articles
+//     // FIXME has to be pipeline from FromStore()
+// 	highlights := articles.Highlights().Query()
+// 	//highlights.Stdout()
+// 
+// 	for _, h := range highlights.Events() {
+// 		err := s.db.SaveEvent(ctx, h)
+// 		if err != nil {
+// 			log.Fatalln(err)
+// 		}
+// 	}
+// 
+// 	fmt.Println("moving on")
 
 	//s.store(npub)
 	//notes := s.search("")

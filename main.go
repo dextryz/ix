@@ -12,8 +12,10 @@ import (
 	"time"
 
 	nos "github.com/dextryz/nostr"
+	"github.com/nbd-wtf/go-nostr"
 
-	"github.com/fiatjaf/eventstore/sqlite3"
+	//"github.com/fiatjaf/eventstore/sqlite3"
+	"github.com/fiatjaf/eventstore/slicestore"
 )
 
 var (
@@ -24,8 +26,6 @@ var (
 func main() {
 
 	log.Println("starting...")
-
-	ctx := context.Background()
 
 	// 	// Elasticsearch store relay
 	// 	relay, err := nostr.RelayConnect(ctx, "ws://localhost:3334")
@@ -49,14 +49,16 @@ func main() {
 		panic(err)
 	}
 
-	db := &sqlite3.SQLite3Backend{
-		DatabaseURL:       "nostr.db",
-		QueryLimit:        1_000_000,
-		QueryAuthorsLimit: 1_000_000,
-		QueryKindsLimit:   1_000_000,
-		QueryIDsLimit:     1_000_000,
-		QueryTagsLimit:    1_000_000,
-	}
+	// 	db := &sqlite3.SQLite3Backend{
+	// 		DatabaseURL:       "nostr.db",
+	// 		QueryLimit:        1_000_000,
+	// 		QueryAuthorsLimit: 1_000_000,
+	// 		QueryKindsLimit:   1_000_000,
+	// 		QueryIDsLimit:     1_000_000,
+	// 		QueryTagsLimit:    1_000_000,
+	// 	}
+
+	db := &slicestore.SliceStore{}
 
 	err = db.Init()
 	if err != nil {
@@ -64,11 +66,12 @@ func main() {
 	}
 
 	h := Handler{
-		wg:  &sync.WaitGroup{},
-		cfg: cfg,
-		m:   &sync.Map{},
-		h:   &sync.Map{},
-		db:  db,
+		wg:        &sync.WaitGroup{},
+		cfg:       cfg,
+		m:         &sync.Map{},
+		h:         &sync.Map{},
+		db:        db,
+		timestamp: make(map[string]nostr.Timestamp),
 	}
 
 	mux := http.NewServeMux()
