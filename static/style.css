@@ -61,7 +61,7 @@ body {
 .body-container {
     display: flex;
     justify-content: center;
-    flex-flow: column wrap;
+    flex-flow: column nowrap; /* Wrap causes the footer to freak out. ? */
     padding: 1rem;
     gap: 1rem;
 }

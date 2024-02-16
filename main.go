@@ -36,14 +36,14 @@ func main() {
 		panic(err)
 	}
 
-	// 	db := &sqlite3.SQLite3Backend{
-	// 		DatabaseURL:       "nostr.db",
-	// 		QueryLimit:        1_000_000,
-	// 		QueryAuthorsLimit: 1_000_000,
-	// 		QueryKindsLimit:   1_000_000,
-	// 		QueryIDsLimit:     1_000_000,
-	// 		QueryTagsLimit:    1_000_000,
-	// 	}
+// 	db := &sqlite3.SQLite3Backend{
+// 		DatabaseURL:       "nostr.db",
+// 		QueryLimit:        1_000_000,
+// 		QueryAuthorsLimit: 1_000_000,
+// 		QueryKindsLimit:   1_000_000,
+// 		QueryIDsLimit:     1_000_000,
+// 		QueryTagsLimit:    1_000_000,
+// 	}
 
 	db := &slicestore.SliceStore{}
 
