@@ -24,19 +24,7 @@ var (
 
 func main() {
 
-	log.Println("starting...")
-
-	// 	// Elasticsearch store relay
-	// 	relay, err := nostr.RelayConnect(ctx, "ws://localhost:3334")
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	//
-	// 	// Slice store relay
-	// 	cache, err := nostr.RelayConnect(ctx, "ws://localhost:3335")
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
+	log.Println("starting server")
 
 	path, ok := os.LookupEnv("NOSTR")
 	if !ok {
@@ -65,8 +53,8 @@ func main() {
 	}
 
 	es := EventStore{
-		Store:       db,
-		lastUpdated: make(map[string]nostr.Timestamp),
+		Store:     db,
+		UpdatedAt: make(map[string]nostr.Timestamp),
 	}
 
 	h := Handler{

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"text/template"
 
 	"github.com/dextryz/nip23"
 	"github.com/dextryz/nip84"
 	nos "github.com/dextryz/nostr"
-	"github.com/dextryz/pipe"
 
 	"github.com/fiatjaf/eventstore"
 	"github.com/nbd-wtf/go-nostr"
@@ -27,7 +27,7 @@ type Tag struct {
 
 type EventStore struct {
 	eventstore.Store
-	lastUpdated map[string]nostr.Timestamp
+	UpdatedAt map[string]nostr.Timestamp
 }
 
 type Handler struct {
@@ -51,6 +51,95 @@ func (s *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Handler) queryRelays(ctx context.Context, filter nostr.Filter) (ev []*nostr.Event) {
+
+	var m sync.Map
+	var wg sync.WaitGroup
+	for _, url := range s.cfg.Relays {
+
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, url string) {
+			defer wg.Done()
+
+			r, err := nostr.RelayConnect(ctx, url)
+			if err != nil {
+				panic(err)
+			}
+
+			events, err := r.QuerySync(ctx, filter)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			for _, e := range events {
+				m.Store(e.ID, e)
+			}
+
+		}(&wg, url)
+	}
+	wg.Wait()
+
+	m.Range(func(_, v any) bool {
+		ev = append(ev, v.(*nostr.Event))
+		return true
+	})
+
+	return ev
+}
+
+func (s *Handler) queryArticles(ctx context.Context, npub string) (ev []*nostr.Event, tags []string, err error) {
+
+	_, pk, err := nip19.Decode(npub)
+	if err != nil {
+		panic(err)
+	}
+
+	// Only pull the latest events
+	ts := s.db.UpdatedAt[npub]
+
+	f := nostr.Filter{
+		Kinds:   []int{nostr.KindArticle},
+		Authors: []string{pk.(string)},
+		Since:   &ts,
+		Limit:   500,
+	}
+
+	// For each article with an identifier, create
+	// a 'd' tag to be used to requesting highlights
+	for _, e := range s.queryRelays(ctx, f) {
+
+		identifier := ""
+		for _, t := range e.Tags {
+			if t.Key() == "d" {
+				identifier = t.Value()
+			}
+		}
+
+		if identifier != "" {
+			ev = append(ev, e)
+			tag := fmt.Sprintf("%d:%s:%s", e.Kind, e.PubKey, identifier)
+			tags = append(tags, tag)
+		}
+	}
+
+	return ev, tags, nil
+}
+
+func (s *Handler) queryHighlights(ctx context.Context, npub string, tags []string) []*nostr.Event {
+
+	if len(tags) > 0 {
+		f := nostr.Filter{
+			Kinds: []int{nos.KindHighlight},
+			Tags: nostr.TagMap{
+				"a": tags,
+			},
+		}
+		return s.queryRelays(ctx, f)
+	}
+
+	return nil
+}
+
 func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
@@ -59,40 +148,37 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("pulling articles for %s", npub)
 
-	articles := pipe.New(s.cfg.Relays).Articles([]string{npub}, s.db.lastUpdated[npub]).Query().WithIdentifier()
+	// 1. Pull and store Articles and Highlights.
 
-	aa := articles.Events()
+	events, tags, err := s.queryArticles(ctx, npub)
+	if err != nil {
+		panic(err)
+	}
 
-	// update timestamp
-	if len(aa) > 0 {
-		// Get all the NIP-84 events of the set of NIP-23 articles
-		// FIXME has to be pipeline from FromStore()
-		highlights := articles.Highlights().Query()
-		for _, h := range highlights.Events() {
-			err := s.db.SaveEvent(ctx, h)
-			if err != nil {
-				log.Fatalln(err)
-			}
+	for _, e := range events {
+
+		err := s.db.SaveEvent(ctx, e)
+		if err != nil {
+			log.Fatalln(err)
 		}
 
-		for _, e := range aa {
-
-			err := s.db.SaveEvent(ctx, e)
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-            if e.CreatedAt > s.db.lastUpdated[npub] {
-                s.db.lastUpdated[npub] = e.CreatedAt + 1
-            }
+		if e.CreatedAt > s.db.UpdatedAt[npub] {
+			s.db.UpdatedAt[npub] = e.CreatedAt + 1
 		}
 	}
 
-	// Storage
+	for _, h := range s.queryHighlights(ctx, npub, tags) {
+		err := s.db.SaveEvent(ctx, h)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
+	// 2. Retrieve and convert events from local cache.
 
 	_, pk, err := nip19.Decode(npub)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	filter := nostr.Filter{
@@ -105,7 +191,6 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Println(len(ch))
 
 	notes := []*nip23.Article{}
 	for e := range ch {
@@ -116,8 +201,7 @@ func (s *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 		notes = append(notes, a)
 	}
 
-	//s.store(npub)
-	//notes := s.search("")
+	// 3. Generate HTML and send to webclient writer.
 
 	tmpl, err := template.ParseFiles("static/home.html", "static/card.html")
 	if err != nil {

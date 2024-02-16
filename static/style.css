@@ -48,6 +48,10 @@ p, h1, h2, h3, h4, h5, h6 {
     --clr-text: #ABB2BF;
 }
 
+main {
+    display: block;
+}
+
 body {
     font-family: 'Geist';
     font-size: 16px;
@@ -249,10 +253,6 @@ footer {
 
 footer i {
     color: var(--clr-red);
-}
-
-main {
-    display: block;
 }
 
 .cards {
