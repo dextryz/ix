@@ -174,8 +174,7 @@ h2 {
 }
 
 a {
-    color: var(--clr-text);
-    font-weight: bold;
+    color: var(--clr-cyan);
     text-decoration: none; /* Removes the underline */
 }
 

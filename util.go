@@ -73,6 +73,16 @@ func ReplaceHighlight(h *nip84.Highlight, a *nip23.Article) (*nip23.Article, err
 	c := a.Content
 	if strings.Contains(c, h.Content) {
 		log.Println("Highlight found")
+
+//         replace := `<span class="inline"
+//             hx-get="highlight/%s"
+//             hx-push-url="true"
+//             hx-target="body"
+//             hx-swap="outerHTML">%s
+//         </span>`
+// 
+// 		txt := fmt.Sprintf(replace, h.Id, h.Content)
+
 		txt := fmt.Sprintf("<span class='highlight'>%s</span>", h.Content)
 		c = strings.ReplaceAll(c, h.Content, txt)
 	}

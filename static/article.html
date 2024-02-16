@@ -10,6 +10,18 @@
         {{ .Content }}
     </section>
 
+    <h1 class="content">
+        References
+    </h1>
+
+    <ul class="content">
+        {{ range .Urls }}
+        <li>
+            <a href="{{ . }}">{{ . }}</a>
+        </li>
+        {{ end }}
+    </ul>
+
 </article>
 
 {{ end }}
